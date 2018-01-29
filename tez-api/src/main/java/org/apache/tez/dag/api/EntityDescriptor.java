@@ -40,7 +40,8 @@ import com.google.common.base.Preconditions;
  */
 @Public
 @SuppressWarnings("unchecked")
-public abstract class EntityDescriptor<T extends EntityDescriptor<T>> implements Writable {
+public class EntityDescriptor<T extends EntityDescriptor<T>> implements Writable {
+  // abstract in Tez, but not in MR3
 
   private static final int SERIALIZE_BUFFER_SIZE = 8192;
   private UserPayload userPayload = null;

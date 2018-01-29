@@ -32,7 +32,8 @@ import org.apache.tez.runtime.api.InputSpecUpdate;
  */
 @Unstable
 @Public
-public class InputConfigureVertexTasksEvent extends Event {
+public class InputConfigureVertexTasksEvent extends Event
+  implements edu.postech.mr3.api.EventFromInputInitializerToVertexManager {
 
   private final int numTasks;
   private final VertexLocationHint locationHint;

@@ -18,14 +18,13 @@
 
 package org.apache.tez.runtime.api.events;
 
-import java.nio.ByteBuffer;
-
+import com.google.common.base.Preconditions;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.tez.runtime.api.Event;
 import org.apache.tez.runtime.api.InputInitializer;
 
-import com.google.common.base.Preconditions;
+import java.nio.ByteBuffer;
 
 /**
  * Events used by {@link InputInitializer} implementations to update the
@@ -36,7 +35,8 @@ import com.google.common.base.Preconditions;
  */
 @Unstable
 @Public
-public class InputUpdatePayloadEvent extends Event {
+public class InputUpdatePayloadEvent extends Event
+  implements edu.postech.mr3.api.EventFromInputInitializerToVertexManager {
 
   private final ByteBuffer userPayload;
 

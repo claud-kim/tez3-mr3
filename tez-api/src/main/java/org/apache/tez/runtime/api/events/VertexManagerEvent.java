@@ -36,7 +36,13 @@ import com.google.common.base.Preconditions;
  */
 @Unstable
 @Public
-public class VertexManagerEvent extends Event {
+public class VertexManagerEvent extends Event
+  implements edu.postech.mr3.api.EventToVertexManager {
+
+  @Override
+  public String destVertexName() {
+    return targetVertexName;
+  }
 
   /**
    * Vertex to which the event should be sent 

@@ -75,7 +75,8 @@ public class MemoryDistributor {
    * @param conf
    *          Tez specific task configuration
    */
-  public MemoryDistributor(int numTotalInputs, int numTotalOutputs, Configuration conf) {
+  public MemoryDistributor(
+      int numTotalInputs, int numTotalOutputs, Configuration conf, long totalMemory) {
     this.conf = conf;
     isEnabled = conf.getBoolean(TezConfiguration.TEZ_TASK_SCALE_MEMORY_ENABLED,
         TezConfiguration.TEZ_TASK_SCALE_MEMORY_ENABLED_DEFAULT);
@@ -92,7 +93,7 @@ public class MemoryDistributor {
 
     this.numTotalInputs = numTotalInputs;
     this.numTotalOutputs = numTotalOutputs;
-    this.totalJvmMemory = Runtime.getRuntime().maxMemory();
+    this.totalJvmMemory = totalMemory;
     this.requestList = Collections.synchronizedList(new LinkedList<RequestorInfo>());
     LOG.info("InitialMemoryDistributor (isEnabled=" + isEnabled + ") invoked with: numInputs="
         + numTotalInputs + ", numOutputs=" + numTotalOutputs
@@ -100,8 +101,10 @@ public class MemoryDistributor {
         + ", allocatorClassName=" + allocatorClassName);
   }
 
+  public MemoryDistributor(int numTotalInputs, int numTotalOutputs, Configuration conf) {
+    this(numTotalInputs, numTotalOutputs, conf, Runtime.getRuntime().maxMemory());
+  }
 
-  
   /**
    * Used by the Tez framework to request memory on behalf of user requests.
    */

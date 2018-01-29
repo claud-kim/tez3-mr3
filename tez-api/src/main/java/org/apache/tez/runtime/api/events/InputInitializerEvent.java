@@ -20,15 +20,14 @@
 
 package org.apache.tez.runtime.api.events;
 
-import java.nio.ByteBuffer;
-
 import com.google.common.base.Preconditions;
-
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
-import org.apache.tez.runtime.api.InputInitializer;
 import org.apache.tez.runtime.api.Event;
+import org.apache.tez.runtime.api.InputInitializer;
+
+import java.nio.ByteBuffer;
 
 /**
  * An event that is routed to the specified {@link InputInitializer}.
@@ -43,7 +42,16 @@ import org.apache.tez.runtime.api.Event;
  */
 @Unstable
 @Public
-public class InputInitializerEvent extends Event {
+public class InputInitializerEvent extends Event
+  implements edu.postech.mr3.api.EventToInputInitializer {
+
+  public String destVertexName() {
+    return targetVertexName;
+  }
+
+  public String destInputName() {
+    return targetInputName;
+  }
 
   private String targetVertexName;
   private String targetInputName;

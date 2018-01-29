@@ -18,12 +18,12 @@
 
 package org.apache.tez.runtime.api.events;
 
-import java.nio.ByteBuffer;
-
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.tez.runtime.api.Event;
 import org.apache.tez.runtime.api.Output;
+
+import java.nio.ByteBuffer;
 
 /**
  * Event used by user code to send information between tasks. An output can
@@ -32,14 +32,52 @@ import org.apache.tez.runtime.api.Output;
  * streaming-based data transfers ) to the Input on the destination vertex.
  */
 @Public
-public final class DataMovementEvent extends Event {
+public final class DataMovementEvent extends Event
+  implements edu.postech.mr3.api.EventToLogicalInput {
 
+  //
+  // for MR3
+  //
+
+  public int srcOutputIndex() {
+    return sourceIndex;
+  }
+
+  // should not be called concurrently
+  public DataMovementEvent updateSrcOutputDestInputIndex(int newSrcOutputIndex, int newDestInputIndex) {
+    /*
+    // this is unsafe in local mode because multiple ContainerWorkers may share the same DataMovementEvent
+    if (this.sourceIndex < 0 || this.targetIndex < 0) {
+      this.sourceIndex = newSrcOutputIndex;
+      this.targetIndex = newDestInputIndex;
+      return this;
+    }
+     */
+    return new DataMovementEvent(newSrcOutputIndex, newDestInputIndex, version, userPayload);
+  }
+
+  @Private
+  public static DataMovementEvent createRaw(int version,
+                                            ByteBuffer userPayload) {
+    return new DataMovementEvent(-1, -1, version, userPayload);
+  }
+
+  public void updateSrcOutputIndex(int newSrcOutputIndex) {
+    this.sourceIndex = newSrcOutputIndex;
+  }
+
+  //
+  // from Tez
+  //
+
+  // sourceIndex is stored in LogicalOutputMetaData and does not need to be included in EventToLogicalInput
   /**
    * Index(i) of the i-th (physical) Input or Output that generated an Event.
    * For a Processor-generated event, this is ignored.
    */
-  private final int sourceIndex;
+  private int sourceIndex;
 
+  // targetIndex is set by EdgeManager and does not need to be included in EventToLogicalInput
   /**
    * Index(i) of the i-th (physical) Input or Output that is meant to receive
    * this Event. For a Processor event, this is ignored.
@@ -59,9 +97,9 @@ public final class DataMovementEvent extends Event {
 
   @Private
   DataMovementEvent(int sourceIndex,
-                            int targetIndex,
-                            int version,
-                            ByteBuffer userPayload) {
+                    int targetIndex,
+                    int version,
+                    ByteBuffer userPayload) {
     this.userPayload = userPayload;
     this.sourceIndex = sourceIndex;
     this.version = version;

@@ -39,7 +39,24 @@ import org.apache.tez.runtime.api.Event;
  * 
  */
 @Public
-public class CompositeDataMovementEvent extends Event {
+public class CompositeDataMovementEvent extends Event
+  implements edu.postech.mr3.api.CompositeEventToLogicalInput {
+
+  //
+  // for MR3
+  //
+
+  public int getSrcOutputIndexStart() {
+    return this.sourceIndexStart;
+  }
+
+  public int getSrcOutputCount() {
+    return this.count;
+  }
+
+  public edu.postech.mr3.api.EventToLogicalInput getBaseEventToLogicalInput() {
+    return new DataMovementEvent(-1, -1, version, userPayload);
+  }
 
   protected final int sourceIndexStart;
   protected final int count;

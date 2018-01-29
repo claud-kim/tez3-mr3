@@ -18,13 +18,13 @@
 
 package org.apache.tez.runtime.api.events;
 
-import java.nio.ByteBuffer;
-
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.tez.dag.api.VertexManagerPlugin;
 import org.apache.tez.runtime.api.Event;
 import org.apache.tez.runtime.api.InputInitializer;
+
+import java.nio.ByteBuffer;
 
 /**
  * Events used by {@link InputInitializer} implementations to provide the
@@ -43,8 +43,14 @@ import org.apache.tez.runtime.api.InputInitializer;
  */
 @Unstable
 @Public
-public final class InputDataInformationEvent extends Event {
+public final class InputDataInformationEvent extends Event
+  implements
+    edu.postech.mr3.api.EventFromInputInitializerToVertexManager,
+    edu.postech.mr3.api.EventFromVertexManagerToLogicalInput {
 
+  public int destTaskIndex() {
+    return targetIndex;
+  }
 
   private final int sourceIndex;
   private int targetIndex; // TODO Likely to be multiple at a later point.
