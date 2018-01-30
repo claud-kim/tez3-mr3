@@ -152,4 +152,9 @@ public abstract class EdgeManagerPlugin {
   public EdgeManagerPluginContext getContext() {
     return this.context;
   }
+
+  public int isDynamicScatterGather(
+      int srcVertexNumTasks, int destVertexInitialNumTasksInDefined, int destVertexNumTasks) {
+    return 0;
+  }
 }
