@@ -24,7 +24,9 @@ import org.apache.tez.runtime.api.Event;
 
 import java.nio.ByteBuffer;
 
-public class CustomProcessorEvent extends Event {
+public class CustomProcessorEvent extends Event
+  implements edu.postech.mr3.api.EventToProcessor {
+
   private ByteBuffer payload;
 
   /**
