@@ -224,6 +224,11 @@ public interface TaskContext {
   public long getTotalMemoryAvailableToTask();
 
   /**
+   * Gets the estimate number of concurrent executors in this process.
+   */
+  public int getEstimateNumExecutors(); 
+
+  /**
    * Get the vertex parallelism of the vertex to which this task belongs.
    *
    * @return Parallelism of the current vertex.

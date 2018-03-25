@@ -219,6 +219,12 @@ public abstract class TezTaskContextImpl implements TaskContext, Closeable {
     return memAvailable;
   }
   
+  @Override
+  public int getEstimateNumExecutors() {
+    // Tez executes one RuntimeTask at a time.
+    return 1;
+  }
+
   protected void signalFatalError(Throwable t, String message, EventMetaData sourceInfo) {
     signalFailure(TaskFailureType.NON_FATAL, t, message, sourceInfo);
   }
