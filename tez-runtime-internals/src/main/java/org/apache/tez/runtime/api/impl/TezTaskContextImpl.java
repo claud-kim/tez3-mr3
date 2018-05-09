@@ -199,6 +199,11 @@ public abstract class TezTaskContextImpl implements TaskContext, Closeable {
   }
 
   @Override
+  public void setServiceProviderMetaData(String serviceName, ByteBuffer metaData) {
+    AuxiliaryServiceHelper.setServiceDataIntoEnv(serviceName, metaData, auxServiceEnv);
+  }
+
+  @Override
   public void requestInitialMemory(long size, MemoryUpdateCallback callbackHandler) {
     // Nulls allowed since all IOs have to make this call.
     if (callbackHandler == null) {

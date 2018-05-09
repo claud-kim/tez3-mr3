@@ -192,6 +192,8 @@ public interface TaskContext {
   @Nullable
   public ByteBuffer getServiceProviderMetaData(String serviceName);
   
+  public void setServiceProviderMetaData(String serviceName, ByteBuffer metaData); 
+
   /**
    * Request a specific amount of memory during initialization
    * (initialize(..*Context)) The requester is notified of allocation via the
