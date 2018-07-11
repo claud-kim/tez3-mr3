@@ -257,4 +257,8 @@ public interface TaskContext {
   @Unstable
   public ExecutorService createTezFrameworkExecutorService(
       int parallelism, String threadNameFormat);
+
+  public void setDagShutdownHook(
+      int dagIdId, 
+      Runnable hook);
 }

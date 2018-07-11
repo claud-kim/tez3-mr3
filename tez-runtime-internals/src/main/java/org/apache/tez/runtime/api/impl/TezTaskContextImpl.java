@@ -270,4 +270,10 @@ public abstract class TezTaskContextImpl implements TaskContext, Closeable {
     this.objectRegistry = null;
     this.initialMemoryDistributor = null;
   }
+
+  public void setDagShutdownHook(
+      int dagIdId, 
+      Runnable hook) {
+    Preconditions.checkState(false, "Not supported");
+  }
 }
