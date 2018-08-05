@@ -91,6 +91,8 @@ public class OrderedGroupedKVInput extends AbstractLogicalInput {
 
   private final AtomicBoolean isStarted = new AtomicBoolean(false);
 
+  private boolean isClosed = false;
+
   public OrderedGroupedKVInput(InputContext inputContext, int numPhysicalInputs) {
     super(inputContext, numPhysicalInputs);
   }
@@ -125,7 +127,7 @@ public class OrderedGroupedKVInput extends AbstractLogicalInput {
 
   @Override
   public synchronized void start() throws IOException {
-    if (!isStarted.get()) {
+    if (!isClosed && !isStarted.get()) {
       memoryUpdateCallbackHandler.validateUpdateReceived();
       // Start the shuffle - copy and merge
       shuffle = createShuffle();
@@ -206,7 +208,9 @@ public class OrderedGroupedKVInput extends AbstractLogicalInput {
     long inputRecords = getContext().getCounters()
         .findCounter(TaskCounter.REDUCE_INPUT_RECORDS).getValue();
     getContext().getStatisticsReporter().reportItemsProcessed(inputRecords);
-    
+
+    isClosed = true;
+
     return Collections.emptyList();
   }
 

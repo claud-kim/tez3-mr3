@@ -81,6 +81,8 @@ public class UnorderedKVInput extends AbstractLogicalInput {
   private SimpleFetchedInputAllocator inputManager;
   private ShuffleEventHandler inputEventHandler;
 
+  private boolean isClosed = false;
+
   public UnorderedKVInput(InputContext inputContext, int numPhysicalInputs) {
     super(inputContext, numPhysicalInputs);
   }
@@ -111,7 +113,7 @@ public class UnorderedKVInput extends AbstractLogicalInput {
 
   @Override
   public synchronized void start() throws IOException {
-    if (!isStarted.get()) {
+    if (!isClosed && !isStarted.get()) {
       ////// Initial configuration
       memoryUpdateCallbackHandler.validateUpdateReceived();
       CompressionCodec codec;
@@ -232,6 +234,8 @@ public class UnorderedKVInput extends AbstractLogicalInput {
     long inputRecords = getContext().getCounters()
         .findCounter(TaskCounter.INPUT_RECORDS_PROCESSED).getValue();
     getContext().getStatisticsReporter().reportItemsProcessed(inputRecords);
+
+    isClosed = true;
 
     return null;
   }
