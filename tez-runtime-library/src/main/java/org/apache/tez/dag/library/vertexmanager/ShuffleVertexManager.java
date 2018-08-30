@@ -523,22 +523,35 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return null;
     }
 
-    CustomShuffleEdgeManagerConfig edgeManagerConfig =
-        new CustomShuffleEdgeManagerConfig(
-            currentParallelism, finalTaskParallelism, basePartitionRange,
-            ((remainderRangeForLastShuffler > 0) ?
-            remainderRangeForLastShuffler : basePartitionRange));
-    EdgeManagerPluginDescriptor descriptor =
-        EdgeManagerPluginDescriptor.create(CustomShuffleEdgeManager.class.getName());
-    descriptor.setUserPayload(edgeManagerConfig.toUserPayload());
+    // TODO
+    if (false) {
+      CustomShuffleEdgeManagerConfig edgeManagerConfig =
+          new CustomShuffleEdgeManagerConfig(
+              currentParallelism, finalTaskParallelism, basePartitionRange,
+              ((remainderRangeForLastShuffler > 0) ?
+              remainderRangeForLastShuffler : basePartitionRange));
+      EdgeManagerPluginDescriptor descriptor =
+          EdgeManagerPluginDescriptor.create(CustomShuffleEdgeManager.class.getName());
+      descriptor.setUserPayload(edgeManagerConfig.toUserPayload());
 
-    Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
-    for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
-      entry.getValue().newDescriptor = descriptor;
+      Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
+      for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
+        entry.getValue().newDescriptor = descriptor;
+      }
+      ReconfigVertexParams params =
+          new ReconfigVertexParams(finalTaskParallelism, null);
+      return params;
+    } else {
+      assert finalTaskParallelism < currentParallelism;
+
+      int[] currentStatsInMB = new int[currentParallelism];
+      for (Map.Entry<String, SourceVertexInfo> entry : getBipartiteInfo()) {
+        assert currentParallelism == entry.getValue().statsInMB.length;
+        for(int index = 0; index < currentParallelism; index++) {
+          currentStatsInMB[index] += entry.getValue().statsInMB[index];
+        }
+      }
     }
-    ReconfigVertexParams params =
-        new ReconfigVertexParams(finalTaskParallelism, null);
-    return params;
   }
 
   @Override

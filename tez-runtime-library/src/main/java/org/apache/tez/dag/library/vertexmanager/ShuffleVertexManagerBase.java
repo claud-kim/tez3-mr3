@@ -132,7 +132,7 @@ abstract class ShuffleVertexManagerBase extends VertexManagerPlugin {
     int numVMEventsReceived;
     long outputSize;
     int[] statsInMB;
-    EdgeManagerPluginDescriptor newDescriptor;
+    EdgeManagerPluginDescriptor newDescriptor;  // used only in reconfigVertex()
 
     SourceVertexInfo(final EdgeProperty edgeProperty,
        int totalTasksToSchedule) {
