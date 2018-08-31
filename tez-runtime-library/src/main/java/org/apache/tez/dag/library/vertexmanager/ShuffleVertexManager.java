@@ -27,6 +27,7 @@ import org.apache.tez.common.TezUtils;
 import org.apache.tez.dag.api.EdgeManagerPluginContext;
 import org.apache.tez.dag.api.EdgeManagerPluginDescriptor;
 import org.apache.tez.dag.api.EdgeManagerPluginOnDemand;
+import org.apache.tez.dag.api.EdgeProperty.DataMovementType;
 import org.apache.tez.dag.api.TezUncheckedException;
 import org.apache.tez.dag.api.UserPayload;
 import org.apache.tez.dag.api.VertexManagerPluginContext;
@@ -52,6 +53,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Starts scheduling tasks when number of completed source tasks crosses 
@@ -533,69 +535,100 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return null;
     }
 
+    // finalTaskParallelism < currentParallelism;
+
     if (!useStatsDynamicPartitionPruning) {
-      CustomShuffleEdgeManagerConfig edgeManagerConfig =
-          new CustomShuffleEdgeManagerConfig(
-              currentParallelism, finalTaskParallelism, basePartitionRange,
-              ((remainderRangeForLastShuffler > 0) ?
-              remainderRangeForLastShuffler : basePartitionRange));
-      EdgeManagerPluginDescriptor descriptor =
-          EdgeManagerPluginDescriptor.create(CustomShuffleEdgeManager.class.getName());
-      descriptor.setUserPayload(edgeManagerConfig.toUserPayload());
-
-      Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
-      for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
-        entry.getValue().newDescriptor = descriptor;
-      }
-      ReconfigVertexParams params =
-          new ReconfigVertexParams(finalTaskParallelism, null);
-      return params;
-    } else {
-      assert finalTaskParallelism < currentParallelism;
-
-      int[] currentStatsInMB = new int[currentParallelism];
-      for (Map.Entry<String, SourceVertexInfo> entry : getBipartiteInfo()) {
-        assert currentParallelism == entry.getValue().statsInMB.length;
-        for(int index = 0; index < currentParallelism; index++) {
-          currentStatsInMB[index] += entry.getValue().statsInMB[index];
-        }
-      }
-
-      scala.Tuple2<int[], int[][]> mappingIndexes =
-        edu.postech.mr3.api.common.Utils.distributeStats(currentStatsInMB, finalTaskParallelism);
-      int[] mapping = mappingIndexes._1();
-      int[][] indexes = mappingIndexes._2();
-
-      int numIndexes = 0;
-      for (int[] partition : indexes) {
-        numIndexes += partition.length;
-      }
-      int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
-
-      ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);
-      buffer.putInt(mapping.length);
-      for (int i = 0; i < mapping.length; i++) {
-        buffer.putInt(mapping[i]);
-      }
-      buffer.putInt(indexes.length);
-      for (int i = 0; i < indexes.length; i++) {
-        buffer.putInt(indexes[i].length);
-        for (int j = 0; j < indexes[i].length; j++) {
-          buffer.putInt(indexes[i][j]);
-        }
-      }
-
-      EdgeManagerPluginDescriptor descriptor =
-          EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.MappingEdgeManager.class.getName());
-      descriptor.setUserPayload(UserPayload.create(buffer));
-
-      Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
-      for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
-        entry.getValue().newDescriptor = descriptor;
-      }
-      ReconfigVertexParams params = new ReconfigVertexParams(mapping, indexes);
-      return params;
+      return computeParams(currentParallelism, finalTaskParallelism);
     }
+
+    // if there are 2+ SCATTER_GATHER edges, revert to computeParams()
+    int numScatterGatherEdges = 0;
+    for(SourceVertexInfo entry : getAllSourceVertexInfo()) {
+      if (entry.edgeProperty.getDataMovementType() == DataMovementType.SCATTER_GATHER) {
+        numScatterGatherEdges++;
+      }
+    }
+    if (numScatterGatherEdges > 1) {
+      return computeParams(currentParallelism, finalTaskParallelism);
+    }
+
+    // fill currentStatsInMB[]
+    int[] currentStatsInMB = new int[currentParallelism];
+    int numMinEqualsMax = 0;
+    for (Map.Entry<String, SourceVertexInfo> entry : getBipartiteInfo()) {
+      assert currentParallelism == entry.getValue().statsInMB.length;
+      int min = Integer.MAX_VALUE;
+      int max = Integer.MIN_VALUE;
+      for(int index = 0; index < currentParallelism; index++) {
+        int stat = entry.getValue().statsInMB[index];
+        currentStatsInMB[index] += stat;
+        if (stat < min) { min = stat; }
+        if (stat > max) { max = stat; }
+      }
+      if (min == max) {
+        numMinEqualsMax++;
+      }
+    }
+
+    // if all stats are identical, revert to computeParams()
+    if (numMinEqualsMax == numScatterGatherEdges) {
+      return computeParams(currentParallelism, finalTaskParallelism);
+    }
+
+    // now use distributeStats()
+    scala.Tuple2<int[], int[][]> mappingIndexes =
+      edu.postech.mr3.api.common.Utils.distributeStats(currentStatsInMB, finalTaskParallelism);
+    int[] mapping = mappingIndexes._1();
+    int[][] indexes = mappingIndexes._2();
+
+    int numIndexes = 0;
+    for (int[] partition : indexes) {
+      numIndexes += partition.length;
+    }
+    int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
+
+    ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);
+    buffer.putInt(mapping.length);
+    for (int i = 0; i < mapping.length; i++) {
+      buffer.putInt(mapping[i]);
+    }
+    buffer.putInt(indexes.length);
+    for (int i = 0; i < indexes.length; i++) {
+      buffer.putInt(indexes[i].length);
+      for (int j = 0; j < indexes[i].length; j++) {
+        buffer.putInt(indexes[i][j]);
+      }
+    }
+
+    EdgeManagerPluginDescriptor descriptor =
+        EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.MappingEdgeManager.class.getName());
+    descriptor.setUserPayload(UserPayload.create(buffer));
+
+    Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
+    for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
+      entry.getValue().newDescriptor = descriptor;
+    }
+    ReconfigVertexParams params = new ReconfigVertexParams(mapping, indexes);
+    return params;
+  }
+
+  private ReconfigVertexParams computeParams(int currentParallelism, int finalTaskParallelism) {
+    CustomShuffleEdgeManagerConfig edgeManagerConfig =
+        new CustomShuffleEdgeManagerConfig(
+            currentParallelism, finalTaskParallelism, basePartitionRange,
+            ((remainderRangeForLastShuffler > 0) ?
+                remainderRangeForLastShuffler : basePartitionRange));
+    EdgeManagerPluginDescriptor descriptor =
+        EdgeManagerPluginDescriptor.create(CustomShuffleEdgeManager.class.getName());
+        descriptor.setUserPayload(edgeManagerConfig.toUserPayload());
+
+    Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
+        for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
+      entry.getValue().newDescriptor = descriptor;
+    }
+    ReconfigVertexParams params =
+        new ReconfigVertexParams(finalTaskParallelism, null);
+        return params;
   }
 
   @Override
