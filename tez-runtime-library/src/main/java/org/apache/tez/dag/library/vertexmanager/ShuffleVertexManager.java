@@ -541,16 +541,17 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
-    // if there are 2+ SCATTER_GATHER edges, revert to computeParams()
     int numScatterGatherEdges = 0;
     for(SourceVertexInfo entry : getAllSourceVertexInfo()) {
       if (entry.edgeProperty.getDataMovementType() == DataMovementType.SCATTER_GATHER) {
         numScatterGatherEdges++;
       }
     }
-    if (numScatterGatherEdges > 1) {
-      return computeParams(currentParallelism, finalTaskParallelism);
-    }
+
+    // if there are 2+ SCATTER_GATHER edges, revert to computeParams()
+    // if (numScatterGatherEdges > 1) {
+    //   return computeParams(currentParallelism, finalTaskParallelism);
+    // }
 
     // fill currentStatsInMB[]
     int[] currentStatsInMB = new int[currentParallelism];
@@ -561,12 +562,17 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       int max = Integer.MIN_VALUE;
       for(int index = 0; index < currentParallelism; index++) {
         int stat = entry.getValue().statsInMB[index];
-        currentStatsInMB[index] += stat;
         if (stat < min) { min = stat; }
         if (stat > max) { max = stat; }
       }
       if (min == max) {
         numMinEqualsMax++;
+      }
+      if (max > 0) {
+        for(int index = 0; index < currentParallelism; index++) {
+          int stat = entry.getValue().statsInMB[index];
+          currentStatsInMB[index] += stat * 100l / max;  // normalize by converting to percentage
+        }
       }
     }
 
