@@ -36,6 +36,7 @@
 
   <properties>
     <mr3.version>0.1</mr3.version>
+    <scala.version>2.11.8</scala.version>
     <maven.test.redirectTestOutputToFile>true</maven.test.redirectTestOutputToFile>
     <clover.license>${user.home}/clover.license</clover.license>
     <hadoop.version>2.7.1</hadoop.version>

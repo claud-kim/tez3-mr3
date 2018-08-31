@@ -462,7 +462,7 @@ public class FairShuffleVertexManager extends ShuffleVertexManagerBase {
   }
 
   @Override
-  void postReconfigVertex() {
+  void postReconfigVertex(ReconfigVertexParams params) {
   }
 
   @Override

@@ -195,11 +195,22 @@ abstract class ShuffleVertexManagerBase extends VertexManagerPlugin {
   static class ReconfigVertexParams {
     final private int finalParallelism;
     final private VertexLocationHint locationHint;
+    final int[] mapping;
+    final int[][] indexes;
 
     public ReconfigVertexParams(final int finalParallelism,
         final VertexLocationHint locationHint) {
       this.finalParallelism = finalParallelism;
       this.locationHint = locationHint;
+      this.mapping = null;
+      this.indexes = null;
+    }
+
+    public ReconfigVertexParams(int[] mapping, int[][] indexes) {
+      this.finalParallelism = indexes.length;
+      this.locationHint = null;
+      this.mapping = mapping;
+      this.indexes = indexes;
     }
 
     public int getFinalParallelism() {
@@ -487,7 +498,7 @@ abstract class ShuffleVertexManagerBase extends VertexManagerPlugin {
    */
   abstract ReconfigVertexParams computeRouting();
 
-  abstract void postReconfigVertex();
+  abstract void postReconfigVertex(ReconfigVertexParams params);
 
   /**
    * Compute optimal parallelism needed for the job
@@ -504,7 +515,7 @@ abstract class ShuffleVertexManagerBase extends VertexManagerPlugin {
         if (params != null) {
           reconfigVertex(params.getFinalParallelism());
           updatePendingTasks();
-          postReconfigVertex();
+          postReconfigVertex(params);
         }
       }
       if (!computeRoutingAction.equals(ComputeRoutingAction.WAIT)) {

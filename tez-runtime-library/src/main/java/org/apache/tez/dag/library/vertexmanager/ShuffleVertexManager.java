@@ -109,7 +109,12 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       "tez.shuffle-vertex-manager.max-src-fraction";
   public static final float TEZ_SHUFFLE_VERTEX_MANAGER_MAX_SRC_FRACTION_DEFAULT = 0.75f;
 
+  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING =
+      "tez.shuffle-vertex-manager.use-stats-dynamic-partition-pruning";
+  public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING_DEFAULT = true;
+
   ShuffleVertexManagerConfig mgrConfig;
+  private boolean useStatsDynamicPartitionPruning;
 
   private int[][] targetIndexes;
   private int basePartitionRange;
@@ -156,6 +161,11 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
         Math.max(1, conf
             .getInt(TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM,
             TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM_DEFAULT)));
+
+    useStatsDynamicPartitionPruning = conf.getBoolean(
+        TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING,
+        TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING_DEFAULT);
+
     return mgrConfig;
   }
 
@@ -523,8 +533,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return null;
     }
 
-    // TODO
-    if (false) {
+    if (!useStatsDynamicPartitionPruning) {
       CustomShuffleEdgeManagerConfig edgeManagerConfig =
           new CustomShuffleEdgeManagerConfig(
               currentParallelism, finalTaskParallelism, basePartitionRange,
@@ -551,12 +560,51 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
           currentStatsInMB[index] += entry.getValue().statsInMB[index];
         }
       }
+
+      scala.Tuple2<int[], int[][]> mappingIndexes =
+        edu.postech.mr3.api.common.Utils.distributeStats(currentStatsInMB, finalTaskParallelism);
+      int[] mapping = mappingIndexes._1();
+      int[][] indexes = mappingIndexes._2();
+
+      int numIndexes = 0;
+      for (int[] partition : indexes) {
+        numIndexes += partition.length;
+      }
+      int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
+
+      ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);
+      buffer.putInt(mapping.length);
+      for (int i = 0; i < mapping.length; i++) {
+        buffer.putInt(mapping[i]);
+      }
+      buffer.putInt(indexes.length);
+      for (int i = 0; i < indexes.length; i++) {
+        buffer.putInt(indexes[i].length);
+        for (int j = 0; j < indexes[i].length; j++) {
+          buffer.putInt(indexes[i][j]);
+        }
+      }
+
+      EdgeManagerPluginDescriptor descriptor =
+          EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.MappingEdgeManager.class.getName());
+      descriptor.setUserPayload(UserPayload.create(buffer));
+
+      Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
+      for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
+        entry.getValue().newDescriptor = descriptor;
+      }
+      ReconfigVertexParams params = new ReconfigVertexParams(mapping, indexes);
+      return params;
     }
   }
 
   @Override
-  void postReconfigVertex() {
+  void postReconfigVertex(ReconfigVertexParams params) {
+    if (params.indexes == null) {
       configureTargetMapping(pendingTasks.size());
+    } else  {
+      targetIndexes = params.indexes;
+    }
   }
 
   private void configureTargetMapping(int tasks) {
