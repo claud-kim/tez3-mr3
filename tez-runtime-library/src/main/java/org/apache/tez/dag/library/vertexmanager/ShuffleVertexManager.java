@@ -551,9 +551,10 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       }
     }
     // if there are many SCATTER_GATHER edges, revert to computeParams()
-    // if (numScatterGatherEdges > 2) {
-    //   return computeParams(currentParallelism, finalTaskParallelism);
-    // }
+    if (numScatterGatherEdges > 1) {
+      LOG.info("Do not use stats because numScatterGatherEdges > 1: " + numScatterGatherEdges);
+      return computeParams(currentParallelism, finalTaskParallelism);
+    }
 
     // initialize currentStatsInMB[]
     int[] currentStatsInMB = new int[currentParallelism];
