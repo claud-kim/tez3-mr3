@@ -538,6 +538,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     // finalTaskParallelism < currentParallelism;
 
     if (!useStatsDynamicPartitionPruning) {
+      LOG.info("Do not use stats because useStats = " + useStatsDynamicPartitionPruning);
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
@@ -557,7 +558,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     // initialize currentStatsInMB[]
     int[] currentStatsInMB = new int[currentParallelism];
     for(int index = 0; index < currentParallelism; index++) {
-      currentStatsInMB[index] = 1;  // to be multiplied
+      currentStatsInMB[index] = 0;  // 1 if to be multiplied
     }
 
     // fill currentStatsInMB[]
@@ -584,6 +585,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
 
     // if all stats are identical, revert to computeParams()
     if (numMinEqualsMax == numScatterGatherEdges) {
+      LOG.info("Do not use stats which are all identical: {}, {}", numMinEqualsMax, numScatterGatherEdges);
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
