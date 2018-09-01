@@ -541,20 +541,26 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
+    // now try useStatsDynamicPartitionPruning
+
+    // if there are many SCATTER_GATHER edges, revert to computeParams()
     int numScatterGatherEdges = 0;
     for(SourceVertexInfo entry : getAllSourceVertexInfo()) {
       if (entry.edgeProperty.getDataMovementType() == DataMovementType.SCATTER_GATHER) {
         numScatterGatherEdges++;
       }
     }
+    if (numScatterGatherEdges > 2) {
+      return computeParams(currentParallelism, finalTaskParallelism);
+    }
 
-    // if there are 2+ SCATTER_GATHER edges, revert to computeParams()
-    // if (numScatterGatherEdges > 1) {
-    //   return computeParams(currentParallelism, finalTaskParallelism);
-    // }
+    // initialize currentStatsInMB[]
+    int[] currentStatsInMB = new int[currentParallelism];
+    for(int index = 0; index < currentParallelism; index++) {
+      currentStatsInMB[index] = 1;  // to be multiplied
+    }
 
     // fill currentStatsInMB[]
-    int[] currentStatsInMB = new int[currentParallelism];
     int numMinEqualsMax = 0;
     for (Map.Entry<String, SourceVertexInfo> entry : getBipartiteInfo()) {
       assert currentParallelism == entry.getValue().statsInMB.length;
@@ -567,11 +573,11 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       }
       if (min == max) {
         numMinEqualsMax++;
-      }
-      if (max > 0) {
+      } else {
+        assert max > 0;
         for(int index = 0; index < currentParallelism; index++) {
           int stat = entry.getValue().statsInMB[index];
-          currentStatsInMB[index] += stat * 100l / max;  // normalize by converting to percentage
+          currentStatsInMB[index] *= 80l * (stat - min) / (max - min) + 20;
         }
       }
     }
