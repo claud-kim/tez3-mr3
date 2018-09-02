@@ -579,7 +579,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
         assert max > 0;
         for(int index = 0; index < currentParallelism; index++) {
           int stat = entry.getValue().statsInMB[index];
-          currentStatsInMB[index] += 80l * stat / max + 20;
+          currentStatsInMB[index] += 90l * stat / max + 10;
         }
       }
     }
