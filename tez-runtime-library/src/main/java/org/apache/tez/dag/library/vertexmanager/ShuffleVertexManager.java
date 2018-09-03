@@ -114,7 +114,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
 
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM =
       "tez.shuffle-vertex-manager.use-stats-auto-parallelism";
-  public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT = true;
+  public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT = false;
 
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES =
       "tez.shuffle.vertex.manager.auto.parallelism.max.edges";
@@ -178,11 +178,9 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     useStatsAutoParallelism = conf.getBoolean(
         TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM,
         TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT);
-
     autoParallelismMaxEdges = conf.getInt(
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES,
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT);
-
     autoParallelismMinPercent = conf.getInt(
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT,
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT);
