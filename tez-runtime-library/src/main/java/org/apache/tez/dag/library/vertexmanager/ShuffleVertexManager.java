@@ -53,7 +53,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Starts scheduling tasks when number of completed source tasks crosses 
@@ -111,12 +110,24 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       "tez.shuffle-vertex-manager.max-src-fraction";
   public static final float TEZ_SHUFFLE_VERTEX_MANAGER_MAX_SRC_FRACTION_DEFAULT = 0.75f;
 
-  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING =
-      "tez.shuffle-vertex-manager.use-stats-dynamic-partition-pruning";
-  public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING_DEFAULT = true;
+  // for using stats[] during auto parallelism
+
+  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM =
+      "tez.shuffle-vertex-manager.use-stats-auto-parallelism";
+  public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT = true;
+
+  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES =
+      "tez.shuffle.vertex.manager.auto.parallelism.max.edges";
+  public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT = 1;
+
+  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT =
+      "tez.shuffle.vertex.manager.auto.parallelism.min.percent";
+  public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT = 20;
 
   ShuffleVertexManagerConfig mgrConfig;
-  private boolean useStatsDynamicPartitionPruning;
+  private boolean useStatsAutoParallelism;
+  private int autoParallelismMaxEdges;
+  private int autoParallelismMinPercent;
 
   private int[][] targetIndexes;
   private int basePartitionRange;
@@ -164,9 +175,17 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
             .getInt(TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM,
             TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM_DEFAULT)));
 
-    useStatsDynamicPartitionPruning = conf.getBoolean(
-        TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING,
-        TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_DYNAMIC_PARTITION_PRUNING_DEFAULT);
+    useStatsAutoParallelism = conf.getBoolean(
+        TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM,
+        TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT);
+
+    autoParallelismMaxEdges = conf.getInt(
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES,
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT);
+
+    autoParallelismMinPercent = conf.getInt(
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT,
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT);
 
     return mgrConfig;
   }
@@ -537,12 +556,12 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
 
     // finalTaskParallelism < currentParallelism;
 
-    if (!useStatsDynamicPartitionPruning) {
-      LOG.info("Do not use stats because useStats = " + useStatsDynamicPartitionPruning);
+    if (!useStatsAutoParallelism) {
+      LOG.info("Do not use stats because useStatsAutoParallelism = " + useStatsAutoParallelism);
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
-    // now try useStatsDynamicPartitionPruning
+    // now try useStatsAutoParallelism
 
     int numScatterGatherEdges = 0;
     for(SourceVertexInfo entry : getAllSourceVertexInfo()) {
@@ -551,21 +570,23 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       }
     }
     // if there are many SCATTER_GATHER edges, revert to computeParams()
-    if (numScatterGatherEdges > 1) {
-      LOG.info("Do not use stats because numScatterGatherEdges > 1: " + numScatterGatherEdges);
+    if (numScatterGatherEdges > autoParallelismMaxEdges) {
+      LOG.info("Do not use stats because numScatterGatherEdges = {} > {}",
+          numScatterGatherEdges, autoParallelismMaxEdges);
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
     // initialize currentStatsInMB[]
     int[] currentStatsInMB = new int[currentParallelism];
     for(int index = 0; index < currentParallelism; index++) {
-      currentStatsInMB[index] = 0;  // 1 if to be multiplied
+      currentStatsInMB[index] = 0;
     }
 
     // fill currentStatsInMB[]
     int numMinEqualsMax = 0;
+    long autoParallelismMaxPercent = 100 - autoParallelismMinPercent;   // long to prevent overflow
     for (Map.Entry<String, SourceVertexInfo> entry : getBipartiteInfo()) {
-      assert currentParallelism == entry.getValue().statsInMB.length;
+      // assert currentParallelism == entry.getValue().statsInMB.length;
       int min = Integer.MAX_VALUE;
       int max = Integer.MIN_VALUE;
       for(int index = 0; index < currentParallelism; index++) {
@@ -579,7 +600,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
         assert max > 0;
         for(int index = 0; index < currentParallelism; index++) {
           int stat = entry.getValue().statsInMB[index];
-          currentStatsInMB[index] += 90l * stat / max + 10;
+          currentStatsInMB[index] += autoParallelismMaxPercent * stat / max + autoParallelismMinPercent;
         }
       }
     }
