@@ -615,10 +615,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     int[] mapping = mappingIndexes._1();
     int[][] indexes = mappingIndexes._2();
 
-    int numIndexes = 0;
-    for (int[] partition : indexes) {
-      numIndexes += partition.length;
-    }
+    int numIndexes = mapping.length;
     int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
 
     ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);

@@ -18,6 +18,7 @@
 
 package org.apache.tez.dag.library.vertexmanager;
 
+import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -26,11 +27,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
+import org.apache.tez.dag.api.EdgeManagerPluginDescriptor;
 import org.apache.tez.dag.api.EdgeProperty;
 import org.apache.tez.dag.api.EdgeProperty.DataMovementType;
 import org.apache.tez.dag.api.InputDescriptor;
 import org.apache.tez.dag.api.TezUncheckedException;
 import org.apache.tez.dag.api.TaskLocationHint;
+import org.apache.tez.dag.api.UserPayload;
 import org.apache.tez.dag.api.VertexManagerPlugin;
 import org.apache.tez.dag.api.VertexManagerPluginContext;
 import org.apache.tez.dag.api.VertexManagerPluginContext.ScheduleTaskRequest;
@@ -87,6 +90,7 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
     Map<String, EdgeProperty> edges = getContext().getInputVertexEdgeProperties();
     int oneToOneSrcTaskCount = 0;
     numOneToOneEdges = 0;
+    int bipartiteSources = 0;
     for (Map.Entry<String, EdgeProperty> entry : edges.entrySet()) {
       EdgeProperty edgeProp = entry.getValue();
       String srcVertex = entry.getKey();
@@ -104,6 +108,8 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
         }
         break;
       case SCATTER_GATHER:
+        bipartiteSources++;
+        break;
       case BROADCAST:
         break;
       default:
@@ -117,11 +123,81 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
       Preconditions
           .checkState(oneToOneSrcTaskCount >= 0, "Vertex: " + getContext().getVertexName());
       if (oneToOneSrcTaskCount != numManagedTasks) {
+        int prevNumManagedTasks = numManagedTasks;
         numManagedTasks = oneToOneSrcTaskCount;
         // must change parallelism to make them the same
         LOG.info("Update parallelism of vertex: " + getContext().getVertexName() + 
             " to " + oneToOneSrcTaskCount + " to match source 1-1 vertices.");
-        getContext().reconfigureVertex(oneToOneSrcTaskCount, null, null);
+        if (bipartiteSources == 0) {
+          getContext().reconfigureVertex(oneToOneSrcTaskCount, null, null);
+        } else {
+          Map<String, EdgeProperty> edgeProperties =
+              new java.util.HashMap<String, EdgeProperty>(bipartiteSources);
+          for (Map.Entry<String, EdgeProperty> entry : edges.entrySet()) {
+            EdgeProperty edgeProp = entry.getValue();
+            switch (edgeProp.getDataMovementType()) {
+              case SCATTER_GATHER:
+                String srcVertex = entry.getKey();
+
+                int[] mapping = new int[prevNumManagedTasks];
+                int[][] indexes = new int[numManagedTasks][];
+
+                int baseNum = prevNumManagedTasks / numManagedTasks;
+                int remainder = prevNumManagedTasks % numManagedTasks;
+
+                LOG.info("Also using MappingEdgeManager for {}: {} {}", srcVertex, baseNum, remainder);
+
+                if (remainder == 0) {
+                  for (int i = 0; i < numManagedTasks; i++) {
+                    indexes[i] = new int[baseNum];
+                  }
+                } else {
+                  for (int i = 0; i < remainder; i++) {
+                    indexes[i] = new int[baseNum + 1];
+                  }
+                  for (int i = remainder; i < numManagedTasks; i++) {
+                    indexes[i] = new int[baseNum];
+                  }
+                }
+                for (int index = 0; index < prevNumManagedTasks; index++) {
+                  int round = index / numManagedTasks;
+                  int dest = index % numManagedTasks;
+                  mapping[index] = dest;
+                  indexes[dest][round] = index;
+                }
+
+                int numIndexes = prevNumManagedTasks;
+                int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
+
+                ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);
+                buffer.putInt(mapping.length);
+                for (int i = 0; i < mapping.length; i++) {
+                  buffer.putInt(mapping[i]);
+                }
+                buffer.putInt(indexes.length);
+                for (int i = 0; i < indexes.length; i++) {
+                  buffer.putInt(indexes[i].length);
+                  for (int j = 0; j < indexes[i].length; j++) {
+                    buffer.putInt(indexes[i][j]);
+                  }
+                }
+
+                EdgeManagerPluginDescriptor descriptor =
+                  EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.MappingEdgeManager.class.getName());
+                descriptor.setUserPayload(UserPayload.create(buffer));
+
+                EdgeProperty newEdgeProp = EdgeProperty.create(descriptor,
+                    DataMovementType.CUSTOM,
+                    edgeProp.getDataSourceType(), edgeProp.getSchedulingType(),
+                    edgeProp.getEdgeSource(), edgeProp.getEdgeDestination());
+                edgeProperties.put(srcVertex, newEdgeProp);
+                break;
+              default:
+                break;
+            }
+          }
+          getContext().reconfigureVertex(oneToOneSrcTaskCount, null, edgeProperties);
+        }
       }
       oneToOneSrcTasksDoneCount = new int[oneToOneSrcTaskCount];
       oneToOneLocationHints = new TaskLocationHint[oneToOneSrcTaskCount];
