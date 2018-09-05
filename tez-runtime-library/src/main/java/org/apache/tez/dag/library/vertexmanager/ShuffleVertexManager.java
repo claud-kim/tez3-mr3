@@ -664,14 +664,11 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
   }
 
   private ReconfigVertexParams computeParams(int currentParallelism, int finalTaskParallelism) {
-    CustomShuffleEdgeManagerConfig edgeManagerConfig =
-        new CustomShuffleEdgeManagerConfig(
-            currentParallelism, finalTaskParallelism, basePartitionRange,
-            ((remainderRangeForLastShuffler > 0) ?
-                remainderRangeForLastShuffler : basePartitionRange));
+    ByteBuffer buffer = ByteBuffer.allocate(1 * 4);   // 1 == number of integers
+    buffer.putInt(basePartitionRange);
     EdgeManagerPluginDescriptor descriptor =
-        EdgeManagerPluginDescriptor.create(CustomShuffleEdgeManager.class.getName());
-        descriptor.setUserPayload(edgeManagerConfig.toUserPayload());
+        EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.DynamicScatterGatherEdgeManager.class.getName());
+    descriptor.setUserPayload(UserPayload.create(buffer));
 
     Iterable<Map.Entry<String, SourceVertexInfo>> bipartiteItr = getBipartiteInfo();
         for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
