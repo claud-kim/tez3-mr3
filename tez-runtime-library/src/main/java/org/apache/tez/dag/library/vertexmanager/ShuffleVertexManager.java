@@ -27,6 +27,7 @@ import org.apache.tez.common.TezUtils;
 import org.apache.tez.dag.api.EdgeManagerPluginContext;
 import org.apache.tez.dag.api.EdgeManagerPluginDescriptor;
 import org.apache.tez.dag.api.EdgeManagerPluginOnDemand;
+import org.apache.tez.dag.api.EdgeProperty;
 import org.apache.tez.dag.api.EdgeProperty.DataMovementType;
 import org.apache.tez.dag.api.TezUncheckedException;
 import org.apache.tez.dag.api.UserPayload;
@@ -559,6 +560,19 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return computeParams(currentParallelism, finalTaskParallelism);
     }
 
+    boolean hasOneToOneOutputEdge = false;
+    Map<String, EdgeProperty> inputs = getContext().getOutputVertexEdgeProperties();
+    for(Map.Entry<String, EdgeProperty> entry : inputs.entrySet()) {
+      if (entry.getValue().getDataMovementType() == DataMovementType.ONE_TO_ONE) {
+        hasOneToOneOutputEdge = true;
+        break;
+      }
+    }
+    if (hasOneToOneOutputEdge) {
+      LOG.info("Do not use stats because of ONE_TO_ONE output edges");
+      return computeParams(currentParallelism, finalTaskParallelism);
+    }
+
     // now try useStatsAutoParallelism
 
     int numScatterGatherEdges = 0;
@@ -618,6 +632,7 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     int numIndexes = mapping.length;
     int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
 
+    // build buffer[]
     ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);
     buffer.putInt(mapping.length);
     for (int i = 0; i < mapping.length; i++) {

@@ -139,49 +139,35 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
               case SCATTER_GATHER:
                 String srcVertex = entry.getKey();
 
-                int[] mapping = new int[prevNumManagedTasks];
-                int[][] indexes = new int[numManagedTasks][];
+                int p = prevNumManagedTasks;;
+                int n = numManagedTasks;
 
-                int baseNum = prevNumManagedTasks / numManagedTasks;
-                int remainder = prevNumManagedTasks % numManagedTasks;
+                // Now we should calculate x == basePartitionRange such that either:
+                //   1) p = n * x
+                //   2) p = (n - 1) * x + r    where 0 < r < x
+                //      n = floor(p / x) + 1   from ShuffleVertexManager.computeRouting()
+                //
+                // In case 2), we obtain the following inequality:
+                //   p / n < x < p / (n - 1)   where p / n and p / (n - 1) are not integers
+                // Hence, we start searching for x from floor(p / n) + 1 to floor(p / (n - 1)), inclusive.
 
-                LOG.info("Also using MappingEdgeManager for {}: {} {}", srcVertex, baseNum, remainder);
-
-                if (remainder == 0) {
-                  for (int i = 0; i < numManagedTasks; i++) {
-                    indexes[i] = new int[baseNum];
-                  }
+                int x;
+                if (p % n == 0) {
+                  x = p / n;
                 } else {
-                  for (int i = 0; i < remainder; i++) {
-                    indexes[i] = new int[baseNum + 1];
+                  for (x = (p / n) + 1; x <= p / (n - 1); x++) {
+                    if (n == (p / x) + 1) {
+                      break;
+                    }
                   }
-                  for (int i = remainder; i < numManagedTasks; i++) {
-                    indexes[i] = new int[baseNum];
-                  }
-                }
-                for (int index = 0; index < prevNumManagedTasks; index++) {
-                  int round = index / numManagedTasks;
-                  int dest = index % numManagedTasks;
-                  mapping[index] = dest;
-                  indexes[dest][round] = index;
-                }
-
-                int numIndexes = prevNumManagedTasks;
-                int numInts = 1 + mapping.length + 1 + indexes.length + numIndexes;
-
-                ByteBuffer buffer = ByteBuffer.allocate(numInts * 4);
-                buffer.putInt(mapping.length);
-                for (int i = 0; i < mapping.length; i++) {
-                  buffer.putInt(mapping[i]);
-                }
-                buffer.putInt(indexes.length);
-                for (int i = 0; i < indexes.length; i++) {
-                  buffer.putInt(indexes[i].length);
-                  for (int j = 0; j < indexes[i].length; j++) {
-                    buffer.putInt(indexes[i][j]);
+                  if (x > p / (n - 1)) {
+                    throw new TezUncheckedException("Cannot handle SCATTER_GATHER: " + srcVertex);
                   }
                 }
+                LOG.info("Using DynamicScatterGatherEdgeManager for {}: {} {} {}", srcVertex, p, n, x);
 
+                ByteBuffer buffer = ByteBuffer.allocate(1 * 4);   // 1 == number of integers
+                buffer.putInt(x);
                 EdgeManagerPluginDescriptor descriptor =
                   EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.MappingEdgeManager.class.getName());
                 descriptor.setUserPayload(UserPayload.create(buffer));
