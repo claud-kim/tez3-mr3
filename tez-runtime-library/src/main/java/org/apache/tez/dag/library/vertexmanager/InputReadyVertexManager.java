@@ -169,7 +169,7 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
                 ByteBuffer buffer = ByteBuffer.allocate(1 * 4);   // 1 == number of integers
                 buffer.putInt(x);
                 EdgeManagerPluginDescriptor descriptor =
-                  EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.MappingEdgeManager.class.getName());
+                  EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.DynamicScatterGatherEdgeManager.class.getName());
                 descriptor.setUserPayload(UserPayload.create(buffer));
 
                 EdgeProperty newEdgeProp = EdgeProperty.create(descriptor,
