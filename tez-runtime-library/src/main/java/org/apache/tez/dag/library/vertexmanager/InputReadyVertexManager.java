@@ -18,7 +18,6 @@
 
 package org.apache.tez.dag.library.vertexmanager;
 
-import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -27,13 +26,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
-import org.apache.tez.dag.api.EdgeManagerPluginDescriptor;
 import org.apache.tez.dag.api.EdgeProperty;
 import org.apache.tez.dag.api.EdgeProperty.DataMovementType;
 import org.apache.tez.dag.api.InputDescriptor;
 import org.apache.tez.dag.api.TezUncheckedException;
 import org.apache.tez.dag.api.TaskLocationHint;
-import org.apache.tez.dag.api.UserPayload;
 import org.apache.tez.dag.api.VertexManagerPlugin;
 import org.apache.tez.dag.api.VertexManagerPluginContext;
 import org.apache.tez.dag.api.VertexManagerPluginContext.ScheduleTaskRequest;
@@ -90,7 +87,6 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
     Map<String, EdgeProperty> edges = getContext().getInputVertexEdgeProperties();
     int oneToOneSrcTaskCount = 0;
     numOneToOneEdges = 0;
-    int bipartiteSources = 0;
     for (Map.Entry<String, EdgeProperty> entry : edges.entrySet()) {
       EdgeProperty edgeProp = entry.getValue();
       String srcVertex = entry.getKey();
@@ -108,8 +104,6 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
         }
         break;
       case SCATTER_GATHER:
-        bipartiteSources++;
-        break;
       case BROADCAST:
         break;
       default:
@@ -123,67 +117,11 @@ public class InputReadyVertexManager extends VertexManagerPlugin {
       Preconditions
           .checkState(oneToOneSrcTaskCount >= 0, "Vertex: " + getContext().getVertexName());
       if (oneToOneSrcTaskCount != numManagedTasks) {
-        int prevNumManagedTasks = numManagedTasks;
         numManagedTasks = oneToOneSrcTaskCount;
         // must change parallelism to make them the same
         LOG.info("Update parallelism of vertex: " + getContext().getVertexName() + 
             " to " + oneToOneSrcTaskCount + " to match source 1-1 vertices.");
-        if (bipartiteSources == 0) {
-          getContext().reconfigureVertex(oneToOneSrcTaskCount, null, null);
-        } else {
-          Map<String, EdgeProperty> edgeProperties =
-              new java.util.HashMap<String, EdgeProperty>(bipartiteSources);
-          for (Map.Entry<String, EdgeProperty> entry : edges.entrySet()) {
-            EdgeProperty edgeProp = entry.getValue();
-            switch (edgeProp.getDataMovementType()) {
-              case SCATTER_GATHER:
-                String srcVertex = entry.getKey();
-
-                int p = prevNumManagedTasks;;
-                int n = numManagedTasks;
-
-                // Now we should calculate x == basePartitionRange such that either:
-                //   1) p = n * x
-                //   2) p = (n - 1) * x + r    where 0 < r < x
-                //      n = floor(p / x) + 1   from ShuffleVertexManager.computeRouting()
-                //
-                // In case 2), we obtain the following inequality:
-                //   p / n < x < p / (n - 1)   where p / n and p / (n - 1) are not integers
-                // Hence, we start searching for x from floor(p / n) + 1 to floor(p / (n - 1)), inclusive.
-
-                int x;
-                if (p % n == 0) {
-                  x = p / n;
-                } else {
-                  for (x = (p / n) + 1; x <= p / (n - 1); x++) {
-                    if (n == (p / x) + 1) {
-                      break;
-                    }
-                  }
-                  if (x > p / (n - 1)) {
-                    throw new TezUncheckedException("Cannot handle SCATTER_GATHER: " + srcVertex);
-                  }
-                }
-                LOG.info("Using DynamicScatterGatherEdgeManager for {}: {} {} {}", srcVertex, p, n, x);
-
-                ByteBuffer buffer = ByteBuffer.allocate(1 * 4);   // 1 == number of integers
-                buffer.putInt(x);
-                EdgeManagerPluginDescriptor descriptor =
-                  EdgeManagerPluginDescriptor.create(edu.postech.mr3.dag.DynamicScatterGatherEdgeManager.class.getName());
-                descriptor.setUserPayload(UserPayload.create(buffer));
-
-                EdgeProperty newEdgeProp = EdgeProperty.create(descriptor,
-                    DataMovementType.CUSTOM,
-                    edgeProp.getDataSourceType(), edgeProp.getSchedulingType(),
-                    edgeProp.getEdgeSource(), edgeProp.getEdgeDestination());
-                edgeProperties.put(srcVertex, newEdgeProp);
-                break;
-              default:
-                break;
-            }
-          }
-          getContext().reconfigureVertex(oneToOneSrcTaskCount, null, edgeProperties);
-        }
+        getContext().reconfigureVertex(oneToOneSrcTaskCount, null, null);
       }
       oneToOneSrcTasksDoneCount = new int[oneToOneSrcTaskCount];
       oneToOneLocationHints = new TaskLocationHint[oneToOneSrcTaskCount];
