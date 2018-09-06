@@ -429,22 +429,6 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     public int getNumDestinationConsumerTasks(int sourceTaskIndex) {
       return numDestinationTasks;
     }
-
-    @Override
-    public int isDynamicScatterGather(
-        int srcVertexNumTasks, int destVertexInitialNumTasksInDefined, int destVertexNumTasks) {
-      if (srcVertexNumTasks == this.numSourceTasks &&
-          destVertexInitialNumTasksInDefined == this.numSourceTaskOutputs &&
-          destVertexInitialNumTasksInDefined ==
-            this.basePartitionRange * (this.numDestinationTasks - 1) + this.remainderRangeForLastShuffler &&
-          destVertexNumTasks == this.numDestinationTasks) {
-        LOG.info("Dynamic ScatterGatherEdgeManager found: " + this.basePartitionRange);
-        return this.basePartitionRange;
-      } else {
-        LOG.info("Not a dynamic ScatterGatherEdgeManager");
-        return 0;
-      }
-    }
   }
 
   private static class CustomShuffleEdgeManagerConfig {
