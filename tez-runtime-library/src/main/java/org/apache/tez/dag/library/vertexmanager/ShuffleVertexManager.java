@@ -185,6 +185,8 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     autoParallelismMinPercent = conf.getInt(
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT,
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT);
+    LOG.info("useStatsAutoParallelism {} {} {}",
+        useStatsAutoParallelism, autoParallelismMaxEdges, autoParallelismMinPercent);
 
     return mgrConfig;
   }
