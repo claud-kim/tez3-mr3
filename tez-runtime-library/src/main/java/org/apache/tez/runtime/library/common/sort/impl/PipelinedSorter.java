@@ -244,7 +244,17 @@ public class PipelinedSorter extends ExternalSorter {
     int size = computeBlockSize(currentAllocatableMemory, availableMemoryMb << 20);
     currentAllocatableMemory -= size;
     int sizeWithoutMeta = (size) - (size % METASIZE);
-    ByteBuffer space = ByteBuffer.allocate(sizeWithoutMeta);
+
+    ByteBuffer bufferFromCache = outputContext.getSoftByteBuffer(sizeWithoutMeta);
+    ByteBuffer space;
+    if (bufferFromCache != null) {
+      bufferFromCache.clear();
+      space = bufferFromCache;
+      LOG.info("reusing ByteBuffer from soft cache: " + sizeWithoutMeta + " " + space.capacity());
+    } else {
+      LOG.info("creating a new ByteBuffer: " + sizeWithoutMeta);
+      space = ByteBuffer.allocate(sizeWithoutMeta);
+    }
 
     buffers.add(space);
     bufferIndex++;
@@ -668,6 +678,11 @@ public class PipelinedSorter extends ExternalSorter {
       // we can send pipeline shuffle event with last event true.
       spill(false);
       sortmaster.shutdown();
+
+      for (ByteBuffer buffer: buffers) {
+        LOG.info("adding soft ByteBuffer: " + buffer.capacity());
+        outputContext.addSoftByteBuffer(buffer);
+      }
 
       //safe to clean up
       buffers.clear();
