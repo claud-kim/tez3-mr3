@@ -276,4 +276,11 @@ public abstract class TezTaskContextImpl implements TaskContext, Closeable {
       Runnable hook) {
     Preconditions.checkState(false, "Not supported");
   }
+
+  public void addSoftByteBuffer(ByteBuffer buffer) {
+  }
+
+  public ByteBuffer getSoftByteBuffer(int capacity) {
+    return null;
+  }
 }

@@ -261,4 +261,9 @@ public interface TaskContext {
   public void setDagShutdownHook(
       int dagIdId, 
       Runnable hook);
+
+  public void addSoftByteBuffer(ByteBuffer buffer);
+
+  // may return null
+  public ByteBuffer getSoftByteBuffer(int capacity);
 }
