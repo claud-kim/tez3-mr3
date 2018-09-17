@@ -117,6 +117,7 @@ public class PipelinedSorter extends ExternalSorter {
   private int bufferIndex = -1;
   private final int MIN_BLOCK_SIZE;
   private final boolean lazyAllocateMem;
+  private final boolean useSoftReference;
   private final Deflater deflater;
   private final String auxiliaryService;
 
@@ -149,6 +150,10 @@ public class PipelinedSorter extends ExternalSorter {
               + "=" + minBlockSize + " should be a positive value between 0 and 2047");
       MIN_BLOCK_SIZE = minBlockSize << 20;
     }
+
+    useSoftReference = this.conf.getBoolean(
+        TezRuntimeConfiguration.TEZ_RUNTIME_PIPELINED_SORTER_USE_SOFT_REFERENCE,
+        TezRuntimeConfiguration.TEZ_RUNTIME_PIPELINED_SORTER_USE_SOFT_REFERENCE_DEFAULT);
 
     StringBuilder initialSetupLogLine = new StringBuilder("Setting up PipelinedSorter for ")
         .append(outputContext.getDestinationVertexName()).append(": ");
@@ -204,6 +209,7 @@ public class PipelinedSorter extends ExternalSorter {
     initialSetupLogLine.append(", maxMemUsage=").append(maxMemLimit);
     initialSetupLogLine.append(", lazyAllocateMem=").append(
         lazyAllocateMem);
+    initialSetupLogLine.append(", useSoftReference=").append(useSoftReference);
     initialSetupLogLine.append(", minBlockSize=").append(MIN_BLOCK_SIZE);
     initialSetupLogLine.append(", initial BLOCK_SIZE=").append(buffers.get(0).capacity());
     initialSetupLogLine.append(", finalMergeEnabled=").append(isFinalMergeEnabled());
@@ -213,7 +219,7 @@ public class PipelinedSorter extends ExternalSorter {
         "=").append(
         sortmb);
 
-    Preconditions.checkState(buffers.size() > 0, "Atleast one buffer needs to be present");
+    Preconditions.checkState(buffers.size() > 0, "At least one buffer needs to be present");
     LOG.info(initialSetupLogLine.toString());
 
     span = new SortSpan(buffers.get(bufferIndex), 1024 * 1024, 16, this.comparator);
@@ -235,17 +241,23 @@ public class PipelinedSorter extends ExternalSorter {
     deflater = TezCommonUtils.newBestCompressionDeflater();
   }
 
-  private ByteBuffer byteBufferAllocate(int size) {
-    ByteBuffer bufferFromCache = outputContext.getSoftByteBuffer(size);
+  private ByteBuffer allocateByteBuffer(int size) {
     ByteBuffer space;
-    if (bufferFromCache != null) {
-      bufferFromCache.clear();
-      space = bufferFromCache;
-      LOG.info("reusing ByteBuffer from soft cache: " + size + " " + space.capacity());
+
+    if (useSoftReference) {
+      ByteBuffer bufferFromCache = outputContext.getSoftByteBuffer(size);
+      if (bufferFromCache != null) {
+        bufferFromCache.clear();
+        space = bufferFromCache;
+        LOG.info("reusing ByteBuffer from soft cache: " + size + " " + space.capacity());
+      } else {
+        LOG.info("creating a new ByteBuffer: " + size);
+        space = ByteBuffer.allocate(size);
+      }
     } else {
-      LOG.info("creating a new ByteBuffer: " + size);
       space = ByteBuffer.allocate(size);
     }
+
     return space;
   }
 
@@ -259,7 +271,7 @@ public class PipelinedSorter extends ExternalSorter {
     currentAllocatableMemory -= size;
     int sizeWithoutMeta = (size) - (size % METASIZE);
 
-    ByteBuffer space = byteBufferAllocate(sizeWithoutMeta);
+    ByteBuffer space = allocateByteBuffer(sizeWithoutMeta);
     buffers.add(space);
     bufferIndex++;
 

@@ -139,6 +139,13 @@ public class TezRuntimeConfiguration {
   public static final int
       TEZ_RUNTIME_PIPELINED_SORTER_MIN_BLOCK_SIZE_IN_MB_DEFAULT = 2000;
 
+  @ConfigurationProperty(type = "boolean")
+  public static final String
+      TEZ_RUNTIME_PIPELINED_SORTER_USE_SOFT_REFERENCE = TEZ_RUNTIME_PREFIX +
+      "pipelined.sorter.use.soft.reference";
+  public static final boolean
+      TEZ_RUNTIME_PIPELINED_SORTER_USE_SOFT_REFERENCE_DEFAULT = false;
+
   /**
    * Setting this to true would enable sorter
    * to auto-allocate memory on need basis in progressive fashion.
@@ -558,6 +565,7 @@ public class TezRuntimeConfiguration {
     tezRuntimeKeys.add(TEZ_RUNTIME_PIPELINED_SORTER_SORT_THREADS);
     tezRuntimeKeys.add(
         TEZ_RUNTIME_PIPELINED_SORTER_MIN_BLOCK_SIZE_IN_MB);
+    tezRuntimeKeys.add(TEZ_RUNTIME_PIPELINED_SORTER_USE_SOFT_REFERENCE);
     tezRuntimeKeys.add(TEZ_RUNTIME_PIPELINED_SORTER_LAZY_ALLOCATE_MEMORY);
     tezRuntimeKeys.add(TEZ_RUNTIME_UNORDERED_OUTPUT_BUFFER_SIZE_MB);
     tezRuntimeKeys.add(TEZ_RUNTIME_UNORDERED_OUTPUT_MAX_PER_BUFFER_SIZE_BYTES);
