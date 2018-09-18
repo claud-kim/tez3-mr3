@@ -695,14 +695,15 @@ public class PipelinedSorter extends ExternalSorter {
       spill(false);
       sortmaster.shutdown();
 
-      for (ByteBuffer buffer: buffers) {
-        LOG.info("adding soft ByteBuffer: " + buffer.capacity());
-        outputContext.addSoftByteBuffer(buffer);
+      if (useSoftReference) {
+        for (ByteBuffer buffer: buffers) {
+          LOG.info("adding soft ByteBuffer: " + buffer.capacity());
+          outputContext.addSoftByteBuffer(buffer);
+        }
       }
 
       //safe to clean up
       buffers.clear();
-
 
       if(indexCacheList.isEmpty()) {
         /*
