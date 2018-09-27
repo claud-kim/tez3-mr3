@@ -473,21 +473,8 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
   }
 
   ReconfigVertexParams computeRouting() {
-    // It is okay to reduce parallelism for ONE_TO_ONE edges, but only if the output vertex does not have
-    // another incoming ONE_TO_ONE edge. Ex.
-    //   V1 --> ONE_TO_ONE --> V2 <-- ONE_TO_ONE <-- V3
-    // In this case, V1 and V3 should keep the same parallelism, and in general, it is hard to detect such
-    // patterns. Hence, we choose not to reduce parallelism in any vertex that has outgoing ONE_TO_ONE edges.
-    boolean hasOneToOneOutputEdge = false;
-    Map<String, EdgeProperty> inputs = getContext().getOutputVertexEdgeProperties();
-    for(Map.Entry<String, EdgeProperty> entry : inputs.entrySet()) {
-      if (entry.getValue().getDataMovementType() == DataMovementType.ONE_TO_ONE) {
-        hasOneToOneOutputEdge = true;
-        break;
-      }
-    }
-    if (hasOneToOneOutputEdge) {
-      LOG.info("Do not reduce auto parallelism because of ONE_TO_ONE output edges");
+    if (!getContext().canReduceParallelism()) {
+      LOG.info("Do not reduce parallelism because of ONE_TO_ONE output edges: " + getContext().getVertexName());
       return null;
     }
 
@@ -660,9 +647,8 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
         for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
       entry.getValue().newDescriptor = descriptor;
     }
-    ReconfigVertexParams params =
-        new ReconfigVertexParams(finalTaskParallelism, null);
-        return params;
+    ReconfigVertexParams params = new ReconfigVertexParams(finalTaskParallelism, null);
+    return params;
   }
 
   @Override

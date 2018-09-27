@@ -372,4 +372,5 @@ public interface VertexManagerPluginContext {
    */
   Map<String, List<String>> getInputVertexGroups();
 
+  boolean canReduceParallelism();
 }
