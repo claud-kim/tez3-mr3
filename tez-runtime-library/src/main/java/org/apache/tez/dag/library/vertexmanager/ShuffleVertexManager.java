@@ -84,10 +84,18 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
   public static final boolean
       TEZ_SHUFFLE_VERTEX_MANAGER_ENABLE_AUTO_PARALLEL_DEFAULT = false;
 
+  /**
+   *  Minimum number of tasks for activating auto parallelism.
+   *  Ex. if set to 20, auto parallelism is activated only if the current number of tasks >= 20.
+   */
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MIN_NUM_TASKS =
       "tez.shuffle-vertex-manager.auto-parallel.min.num.tasks";
   public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MIN_NUM_TASKS_DEFAULT = 20;
 
+  /**
+   * Percentage of the current number of tasks that serves as the limit of a new parallelism.
+   * Ex. if set to 10, a new parallelism can be set to no lower than 10% * N where N = current # of tasks
+   */
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MAX_REDUCTION_PERCENTAGE =
       "tez.shuffle-vertex-manager.auto-parallel.max.reduction.percentage";
   public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MAX_REDUCTION_PERCENTAGE_DEFAULT = 10;
