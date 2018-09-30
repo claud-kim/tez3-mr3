@@ -125,10 +125,6 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       "tez.shuffle-vertex-manager.use-stats-auto-parallelism";
   public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT = false;
 
-  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES =
-      "tez.shuffle.vertex.manager.auto.parallelism.max.edges";
-  public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT = 1;
-
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT =
       "tez.shuffle.vertex.manager.auto.parallelism.min.percent";
   public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT = 20;
@@ -137,7 +133,6 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
   private int autoParallelismMinNumTasks;
   private int autoParallelismMaxReductionPercentage;
   private boolean useStatsAutoParallelism;
-  private int autoParallelismMaxEdges;
   private int autoParallelismMinPercent;
 
   private int[][] targetIndexes;
@@ -196,15 +191,12 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
     useStatsAutoParallelism = conf.getBoolean(
         TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM,
         TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT);
-    autoParallelismMaxEdges = conf.getInt(
-        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES,
-        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT);
     autoParallelismMinPercent = conf.getInt(
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT,
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT);
-    LOG.info("config for auto parallelism: {} {} {} {} {}",
+    LOG.info("config for auto parallelism: {} {} {} {}",
         autoParallelismMinNumTasks, autoParallelismMaxReductionPercentage,
-        useStatsAutoParallelism, autoParallelismMaxEdges, autoParallelismMinPercent);
+        useStatsAutoParallelism, autoParallelismMinPercent);
 
     return mgrConfig;
   }
@@ -590,12 +582,6 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       if (entry.edgeProperty.getDataMovementType() == DataMovementType.SCATTER_GATHER) {
         numScatterGatherEdges++;
       }
-    }
-    // if there are many SCATTER_GATHER edges, revert to computeParams()
-    if (numScatterGatherEdges > autoParallelismMaxEdges) {
-      LOG.info("Do not use stats because numScatterGatherEdges = {} > {}",
-          numScatterGatherEdges, autoParallelismMaxEdges);
-      return computeParams(currentParallelism, finalTaskParallelism);
     }
 
     // initialize currentStatsInMB[]
