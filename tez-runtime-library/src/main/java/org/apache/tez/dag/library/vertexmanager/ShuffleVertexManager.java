@@ -85,6 +85,22 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       TEZ_SHUFFLE_VERTEX_MANAGER_ENABLE_AUTO_PARALLEL_DEFAULT = false;
 
   /**
+   *  Minimum number of tasks for activating auto parallelism.
+   *  Ex. if set to 20, auto parallelism is activated only if the current number of tasks >= 20.
+   */
+  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MIN_NUM_TASKS =
+      "tez.shuffle-vertex-manager.auto-parallel.min.num.tasks";
+  public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MIN_NUM_TASKS_DEFAULT = 20;
+
+  /**
+   * Percentage of the current number of tasks that serves as the limit of a new parallelism.
+   * Ex. if set to 10, a new parallelism can be set to no lower than 10% * N where N = current # of tasks
+   */
+  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MAX_REDUCTION_PERCENTAGE =
+      "tez.shuffle-vertex-manager.auto-parallel.max.reduction.percentage";
+  public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MAX_REDUCTION_PERCENTAGE_DEFAULT = 10;
+
+  /**
    * Automatic parallelism determination will not decrease parallelism below this value
    */
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM =
@@ -117,17 +133,14 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       "tez.shuffle-vertex-manager.use-stats-auto-parallelism";
   public static final boolean TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT = false;
 
-  public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES =
-      "tez.shuffle.vertex.manager.auto.parallelism.max.edges";
-  public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT = 1;
-
   public static final String TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT =
       "tez.shuffle.vertex.manager.auto.parallelism.min.percent";
   public static final int TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT = 20;
 
   ShuffleVertexManagerConfig mgrConfig;
+  private int autoParallelismMinNumTasks;
+  private int autoParallelismMaxReductionPercentage;
   private boolean useStatsAutoParallelism;
-  private int autoParallelismMaxEdges;
   private int autoParallelismMinPercent;
 
   private int[][] targetIndexes;
@@ -176,17 +189,22 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
             .getInt(TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM,
             TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM_DEFAULT)));
 
+    autoParallelismMinNumTasks = conf.getInt(
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MIN_NUM_TASKS,
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MIN_NUM_TASKS_DEFAULT);
+    autoParallelismMaxReductionPercentage = conf.getInt(
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MAX_REDUCTION_PERCENTAGE,
+        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLEL_MAX_REDUCTION_PERCENTAGE_DEFAULT);
+
     useStatsAutoParallelism = conf.getBoolean(
         TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM,
         TEZ_SHUFFLE_VERTEX_MANAGER_USE_STATS_AUTO_PARALLELISM_DEFAULT);
-    autoParallelismMaxEdges = conf.getInt(
-        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES,
-        TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MAX_EDGES_DEFAULT);
     autoParallelismMinPercent = conf.getInt(
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT,
         TEZ_SHUFFLE_VERTEX_MANAGER_AUTO_PARALLELISM_MIN_PERCENT_DEFAULT);
-    LOG.info("useStatsAutoParallelism {} {} {}",
-        useStatsAutoParallelism, autoParallelismMaxEdges, autoParallelismMinPercent);
+    LOG.info("config for auto parallelism: {} {} {} {}",
+        autoParallelismMinNumTasks, autoParallelismMaxReductionPercentage,
+        useStatsAutoParallelism, autoParallelismMinPercent);
 
     return mgrConfig;
   }
@@ -473,25 +491,18 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
   }
 
   ReconfigVertexParams computeRouting() {
-    // It is okay to reduce parallelism for ONE_TO_ONE edges, but only if the output vertex does not have
-    // another incoming ONE_TO_ONE edge. Ex.
-    //   V1 --> ONE_TO_ONE --> V2 <-- ONE_TO_ONE <-- V3
-    // In this case, V1 and V3 should keep the same parallelism, and in general, it is hard to detect such
-    // patterns. Hence, we choose not to reduce parallelism in any vertex that has outgoing ONE_TO_ONE edges.
-    boolean hasOneToOneOutputEdge = false;
-    Map<String, EdgeProperty> inputs = getContext().getOutputVertexEdgeProperties();
-    for(Map.Entry<String, EdgeProperty> entry : inputs.entrySet()) {
-      if (entry.getValue().getDataMovementType() == DataMovementType.ONE_TO_ONE) {
-        hasOneToOneOutputEdge = true;
-        break;
-      }
-    }
-    if (hasOneToOneOutputEdge) {
-      LOG.info("Do not reduce auto parallelism because of ONE_TO_ONE output edges");
+    int currentParallelism = pendingTasks.size();
+
+    if (currentParallelism < autoParallelismMinNumTasks) {
+      LOG.info("Do not reduce parallelism because currentParallelism is smaller than minimum: {} {}",
+          currentParallelism, autoParallelismMinNumTasks);
       return null;
     }
 
-    int currentParallelism = pendingTasks.size();
+    if (!getContext().canReduceParallelism()) {
+      LOG.info("Do not reduce parallelism because of ONE_TO_ONE output edges: " + getContext().getVertexName());
+      return null;
+    }
 
     // Change this to use per partition stats for more accuracy TEZ-2962.
     // Instead of aggregating overall size and then dividing equally - coalesce partitions until
@@ -533,6 +544,14 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       return null;
     }
 
+    int minReducibleParallelism =
+        (int)((long)currentParallelism * autoParallelismMaxReductionPercentage / 100);
+    if (desiredTaskParallelism < minReducibleParallelism) {
+      LOG.info("Readjusting desired parallelism for vertex: {} from {} to {}", getContext().getVertexName(),
+          desiredTaskParallelism, minReducibleParallelism);
+      desiredTaskParallelism = minReducibleParallelism;
+    }
+
     // most shufflers will be assigned this range
     basePartitionRange = currentParallelism/desiredTaskParallelism;
     if (basePartitionRange <= 1) {
@@ -571,12 +590,6 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
       if (entry.edgeProperty.getDataMovementType() == DataMovementType.SCATTER_GATHER) {
         numScatterGatherEdges++;
       }
-    }
-    // if there are many SCATTER_GATHER edges, revert to computeParams()
-    if (numScatterGatherEdges > autoParallelismMaxEdges) {
-      LOG.info("Do not use stats because numScatterGatherEdges = {} > {}",
-          numScatterGatherEdges, autoParallelismMaxEdges);
-      return computeParams(currentParallelism, finalTaskParallelism);
     }
 
     // initialize currentStatsInMB[]
@@ -660,9 +673,8 @@ public class ShuffleVertexManager extends ShuffleVertexManagerBase {
         for(Map.Entry<String, SourceVertexInfo> entry : bipartiteItr) {
       entry.getValue().newDescriptor = descriptor;
     }
-    ReconfigVertexParams params =
-        new ReconfigVertexParams(finalTaskParallelism, null);
-        return params;
+    ReconfigVertexParams params = new ReconfigVertexParams(finalTaskParallelism, null);
+    return params;
   }
 
   @Override

@@ -400,6 +400,11 @@ public class VertexManager {
     }
 
     @Override
+    public boolean canReduceParallelism() {
+      return false;   // do not use auto parallelism for Tez
+    }
+
+    @Override
     public void onStateUpdated(VertexStateUpdate event) {
       // this is not called by the vertex manager plugin. 
       // no need to synchronize this. similar to other external notification methods
