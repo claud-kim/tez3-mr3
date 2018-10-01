@@ -241,26 +241,6 @@ public class PipelinedSorter extends ExternalSorter {
     deflater = TezCommonUtils.newBestCompressionDeflater();
   }
 
-  private ByteBuffer allocateByteBuffer(int size) {
-    ByteBuffer space;
-
-    if (useSoftReference) {
-      ByteBuffer bufferFromCache = outputContext.getSoftByteBuffer(size);
-      if (bufferFromCache != null) {
-        bufferFromCache.clear();
-        space = bufferFromCache;
-        LOG.info("reusing ByteBuffer from soft cache: " + size + " " + space.capacity());
-      } else {
-        LOG.info("creating a new ByteBuffer: " + size);
-        space = ByteBuffer.allocate(size);
-      }
-    } else {
-      space = ByteBuffer.allocate(size);
-    }
-
-    return space;
-  }
-
   ByteBuffer allocateSpace() {
     if (currentAllocatableMemory <= 0) {
       //No space available.
@@ -271,7 +251,21 @@ public class PipelinedSorter extends ExternalSorter {
     currentAllocatableMemory -= size;
     int sizeWithoutMeta = (size) - (size % METASIZE);
 
-    ByteBuffer space = allocateByteBuffer(sizeWithoutMeta);
+    ByteBuffer space;
+    if (useSoftReference) {
+      ByteBuffer bufferFromCache = outputContext.getSoftByteBuffer(sizeWithoutMeta);
+      if (bufferFromCache != null) {
+        bufferFromCache.clear();
+        space = bufferFromCache;
+        LOG.info("reusing ByteBuffer from soft cache: " + sizeWithoutMeta + " " + space.capacity());
+      } else {
+        LOG.info("creating a new ByteBuffer: " + sizeWithoutMeta);
+        space = ByteBuffer.allocate(sizeWithoutMeta);
+      }
+    } else {
+      space = ByteBuffer.allocate(sizeWithoutMeta);
+    }
+
     buffers.add(space);
     bufferIndex++;
 
