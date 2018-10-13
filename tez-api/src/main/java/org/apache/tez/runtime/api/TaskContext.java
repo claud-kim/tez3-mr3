@@ -258,9 +258,14 @@ public interface TaskContext {
   public ExecutorService createTezFrameworkExecutorService(
       int parallelism, String threadNameFormat);
 
+  public interface VertexShutdown {
+    void run(int vertexIdId);
+  }
+
   public void setDagShutdownHook(
       int dagIdId, 
-      Runnable hook);
+      Runnable hook,
+      VertexShutdown vertexHook);
 
   public void addSoftByteBuffer(ByteBuffer buffer);
 

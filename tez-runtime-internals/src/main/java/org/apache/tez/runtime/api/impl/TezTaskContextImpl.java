@@ -273,7 +273,8 @@ public abstract class TezTaskContextImpl implements TaskContext, Closeable {
 
   public void setDagShutdownHook(
       int dagIdId, 
-      Runnable hook) {
+      Runnable hook,
+      VertexShutdown vertexHook) {
     Preconditions.checkState(false, "Not supported");
   }
 
